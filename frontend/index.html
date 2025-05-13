@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Air Quality Monitoring System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.4.0/axios.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        .gauge {
+            width: 100%;
+            max-width: 250px;
+            position: relative;
+            margin: 0 auto;
+        }
+        .gauge-arc {
+            stroke-width: 20;
+            fill: none;
+        }
+        .gauge-background {
+            stroke: #e6e6e6;
+        }
+        .gauge-value {
+            stroke: #3b82f6;
+        }
+        .gauge-text {
+            font-family: sans-serif;
+            font-weight: bold;
+            font-size: 1.5em;
+            text-anchor: middle;
+            dominant-baseline: middle;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-blue-600 text-white p-4 shadow-md">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">Smart Air Quality Monitor</h1>
+            <div class="flex items-center space-x-4">
+                <span id="connection-status" class="px-3 py-1 rounded-full bg-green-500 text-white text-sm">Connected</span>
+                <span id="last-updated" class="text-sm">Last updated: Never</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-4">
+        <!-- Main Dashboard -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Temperature Card -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">Temperature</h2>
+                <div class="flex justify-center">
+                    <svg class="gauge" viewBox="0 0 200 100">
+                        <path class="gauge-arc gauge-background" d="M40,90 A50,50 0 0,1 160,90"></path>
+                        <path id="temp-gauge" class="gauge-arc gauge-value" d="M40,90 A50,50 0 0,1 160,90" stroke-dasharray="188.5 188.5" stroke-dashoffset="188.5"></path>
+                        <text id="temp-value" class="gauge-text" x="100" y="85">--°C</text>
+                    </svg>
+                </div>
+                <div class="flex justify-between text-sm text-gray-500 mt-2">
+                    <span>0°C</span>
+                    <span>50°C</span>
+                </div>
+            </div>
+
+            <!-- Humidity Card -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">Humidity</h2>
+                <div class="flex justify-center">
+                    <svg class="gauge" viewBox="0 0 200 100">
+                        <path class="gauge-arc gauge-background" d="M40,90 A50,50 0 0,1 160,90"></path>
+                        <path id="humidity-gauge" class="gauge-arc gauge-value" d="M40,90 A50,50 0 0,1 160,90" stroke-dasharray="188.5 188.5" stroke-dashoffset="188.5"></path>
+                        <text id="humidity-value" class="gauge-text" x="100" y="85">--%</text>
+                    </svg>
+                </div>
+                <div class="flex justify-between text-sm text-gray-500 mt-2">
+                    <span>0%</span>
+                    <span>100%</span>
+                </div>
+            </div>
+
+            <!-- Air Quality Card -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">Air Quality</h2>
+                <div id="aqi-card" class="p-4 rounded-lg text-center">
+                    <div id="aqi-indicator" class="w-32 h-32 mx-auto rounded-full bg-gray-200 flex items-center justify-center">
+                        <span id="aqi-value" class="text-3xl font-bold">--</span>
+                    </div>
+                    <h3 id="aqi-category" class="mt-4 text-xl font-semibold">Loading...</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- Device Control Panel -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Device Control</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Fan Control -->
+                <div class="border rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium">Ventilation Fan</h3>
+                        <span id="fan-status" class="px-3 py-1 rounded-full bg-red-100 text-red-800 text-sm">OFF</span>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="fan-on" class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Turn ON</button>
+                        <button id="fan-off" class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">Turn OFF</button>
+                    </div>
+                </div>
+
+                <!-- Air Purifier Control -->
+                <div class="border rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium">Air Purifier</h3>
+                        <span id="purifier-status" class="px-3 py-1 rounded-full bg-red-100 text-red-800 text-sm">OFF</span>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="purifier-on" class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Turn ON</button>
+                        <button id="purifier-off" class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">Turn OFF</button>
+                    </div>
+                </div>
+
+                <!-- Alarm Control -->
+                <div class="border rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium">Alarm</h3>
+                        <span id="alarm-status" class="px-3 py-1 rounded-full bg-red-100 text-red-800 text-sm">OFF</span>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="alarm-on" class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Turn ON</button>
+                        <button id="alarm-off" class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">Turn OFF</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- History Chart -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">History</h2>
+                <div>
+                    <canvas id="historyChart" height="300"></canvas>
+                </div>
+            </div>
+
+            <!-- Usage Statistics -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">Device Usage Statistics</h2>
+                <div>
+                    <canvas id="usageChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerts and Notifications -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Alerts</h2>
+            <div id="alerts-container" class="space-y-4">
+                <!-- Alerts will be dynamically added here -->
+                <div class="hidden alert-template bg-yellow-100 border-l-4 border-yellow-500 p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-yellow-700 alert-message">
+                                Alert message here
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // API endpoint
+        const API_URL = 'http://localhost:8000';
+        
+        // Charts
+        let historyChart;
+        let usageChart;
+        
+        // Data variables
+        let sensorData = {
+            temperature: 0,
+            humidity: 0,
+            airQuality: 0,
+            aqiCategory: 'Unknown',
+            moldRisk: 0,
+        };
+        
+        let deviceState = {
+            fan: false,
+            purifier: false,
+            alarm: false
+        };
+        
+        let historyData = [];
+        let usageData = { fan: 0, purifier: 0, alarm: 0 };
+        
+        // Initialize charts
+        function initCharts() {
+            // History chart
+            const historyCtx = document.getElementById('historyChart').getContext('2d');
+            historyChart = new Chart(historyCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Temperature (°C)',
+                            data: [],
+                            borderColor: 'rgb(255, 99, 132)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Humidity (%)',
+                            data: [],
+                            borderColor: 'rgb(54, 162, 235)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Air Quality (Raw)',
+                            data: [],
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            ticks: {
+                                maxTicksLimit: 10
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Usage chart
+            const usageCtx = document.getElementById('usageChart').getContext('2d');
+            usageChart = new Chart(usageCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Fan', 'Purifier', 'Alarm'],
+                    datasets: [{
+                        label: 'Usage Time (minutes)',
+                        data: [0, 0, 0],
+                        backgroundColor: [
+                            'rgba(54, 162, 235, 0.5)',
+                            'rgba(75, 192, 192, 0.5)',
+                            'rgba(255, 99, 132, 0.5)'
+                        ],
+                        borderColor: [
+                            'rgb(54, 162, 235)',
+                            'rgb(75, 192, 192)',
+                            'rgb(255, 99, 132)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Update gauge values
+        function updateGauges() {
+            // Temperature gauge
+            const tempGauge = document.getElementById('temp-gauge');
+            const tempValue = document.getElementById('temp-value');
+            const tempPercentage = Math.min(Math.max(sensorData.temperature / 50, 0), 1);
+            const tempOffset = 188.5 - (tempPercentage * 188.5);
+            tempGauge.setAttribute('stroke-dashoffset', tempOffset);
+            tempValue.textContent = `${sensorData.temperature.toFixed(1)}°C`;
+            
+            // Change color based on temperature
+            if (sensorData.temperature < 18) {
+                tempGauge.setAttribute('stroke', '#3b82f6'); // blue
+            } else if (sensorData.temperature < 25) {
+                tempGauge.setAttribute('stroke', '#10b981'); // green
+            } else if (sensorData.temperature < 30) {
+                tempGauge.setAttribute('stroke', '#f59e0b'); // yellow
+            } else {
+                tempGauge.setAttribute('stroke', '#ef4444'); // red
+            }
+            
+            // Humidity gauge
+            const humidityGauge = document.getElementById('humidity-gauge');
+            const humidityValue = document.getElementById('humidity-value');
+            const humidityPercentage = Math.min(Math.max(sensorData.humidity / 100, 0), 1);
+            const humidityOffset = 188.5 - (humidityPercentage * 188.5);
+            humidityGauge.setAttribute('stroke-dashoffset', humidityOffset);
+            humidityValue.textContent = `${sensorData.humidity.toFixed(1)}%`;
+            
+            // Change color based on humidity
+            if (sensorData.humidity < 30) {
+                humidityGauge.setAttribute('stroke', '#3b82f6'); // blue
+            } else if (sensorData.humidity < 60) {
+                humidityGauge.setAttribute('stroke', '#10b981'); // green
+            } else if (sensorData.humidity < 75) {
+                humidityGauge.setAttribute('stroke', '#f59e0b'); // yellow
+            } else {
+                humidityGauge.setAttribute('stroke', '#ef4444'); // red
+            }
+            
+            // Air quality indicator - Use raw values instead of normalized values
+            const aqiIndicator = document.getElementById('aqi-indicator');
+            const aqiValue = document.getElementById('aqi-value');
+            const aqiCategory = document.getElementById('aqi-category');
+            
+            // Display raw AQI value instead of normalized value
+            aqiValue.textContent = sensorData.airQuality.toFixed(0);
+            aqiCategory.textContent = sensorData.aqiCategory;
+            
+            // Set color based on AQI category
+            switch (sensorData.aqiCategory) {
+                case 'Good':
+                    aqiIndicator.className = 'w-32 h-32 mx-auto rounded-full bg-green-500 flex items-center justify-center';
+                    aqiValue.className = 'text-3xl font-bold text-white';
+                    break;
+                case 'Moderate':
+                    aqiIndicator.className = 'w-32 h-32 mx-auto rounded-full bg-yellow-500 flex items-center justify-center';
+                    aqiValue.className = 'text-3xl font-bold text-white';
+                    break;
+                case 'Unhealthy for Sensitive Groups':
+                    aqiIndicator.className = 'w-32 h-32 mx-auto rounded-full bg-orange-500 flex items-center justify-center';
+                    aqiValue.className = 'text-3xl font-bold text-white';
+                    break;
+                case 'Unhealthy':
+                    aqiIndicator.className = 'w-32 h-32 mx-auto rounded-full bg-red-500 flex items-center justify-center';
+                    aqiValue.className = 'text-3xl font-bold text-white';
+                    break;
+                case 'Hazardous':
+                    aqiIndicator.className = 'w-32 h-32 mx-auto rounded-full bg-purple-800 flex items-center justify-center';
+                    aqiValue.className = 'text-3xl font-bold text-white';
+                    break;
+                default:
+                    aqiIndicator.className = 'w-32 h-32 mx-auto rounded-full bg-gray-500 flex items-center justify-center';
+                    aqiValue.className = 'text-3xl font-bold text-white';
+            }
+        }
+        
+        // Update device status indicators
+        function updateDeviceStatus() {
+            // Fan status
+            const fanStatus = document.getElementById('fan-status');
+            fanStatus.textContent = deviceState.fan ? 'ON' : 'OFF';
+            fanStatus.className = deviceState.fan ? 
+                'px-3 py-1 rounded-full bg-green-100 text-green-800 text-sm' : 
+                'px-3 py-1 rounded-full bg-red-100 text-red-800 text-sm';
+            
+            // Purifier status
+            const purifierStatus = document.getElementById('purifier-status');
+            purifierStatus.textContent = deviceState.purifier ? 'ON' : 'OFF';
+            purifierStatus.className = deviceState.purifier ? 
+                'px-3 py-1 rounded-full bg-green-100 text-green-800 text-sm' : 
+                'px-3 py-1 rounded-full bg-red-100 text-red-800 text-sm';
+            
+            // Alarm status
+            const alarmStatus = document.getElementById('alarm-status');
+            alarmStatus.textContent = deviceState.alarm ? 'ON' : 'OFF';
+            alarmStatus.className = deviceState.alarm ? 
+                'px-3 py-1 rounded-full bg-green-100 text-green-800 text-sm' : 
+                'px-3 py-1 rounded-full bg-red-100 text-red-800 text-sm';
+        }
+        
+        // Update history chart
+        function updateHistoryChart() {
+            if (historyData.length === 0) return;
+            
+            // Process history data
+            const labels = historyData.map(item => {
+                const date = new Date(item.timestamp);
+                return date.toLocaleTimeString();
+            }).slice(-20); // Show last 20 data points
+            
+            const tempData = historyData.map(item => item.temperature).slice(-20);
+            const humidityData = historyData.map(item => item.humidity).slice(-20);
+            // Use raw air quality data instead of normalizing
+            const airQualityData = historyData.map(item => item.air_quality).slice(-20);
+            
+            // Update chart
+            historyChart.data.labels = labels;
+            historyChart.data.datasets[0].data = tempData;
+            historyChart.data.datasets[1].data = humidityData;
+            historyChart.data.datasets[2].data = airQualityData;
+            historyChart.update();
+        }
+        
+        // Update usage chart
+        function updateUsageChart() {
+            // Convert seconds to minutes for display
+            const fanMinutes = (usageData.fan / 60).toFixed(1);
+            const purifierMinutes = (usageData.purifier / 60).toFixed(1);
+            const alarmMinutes = (usageData.alarm / 60).toFixed(1);
+            
+            usageChart.data.datasets[0].data = [fanMinutes, purifierMinutes, alarmMinutes];
+            usageChart.update();
+        }
+        
+        // Show alerts based on sensor data
+        function showAlerts() {
+            const alertsContainer = document.getElementById('alerts-container');
+            const alertTemplate = document.querySelector('.alert-template');
+            
+            // Clear previous alerts except for the template
+            Array.from(alertsContainer.children).forEach(child => {
+                if (!child.classList.contains('alert-template')) {
+                    alertsContainer.removeChild(child);
+                }
+            });
+            
+            // Check conditions and create alerts
+            const alerts = [];
+            
+            // Air quality alerts
+            if (sensorData.aqiCategory === 'Unhealthy') {
+                alerts.push({
+                    type: 'warning',
+                    message: 'Air quality is unhealthy. Purifier has been activated.'
+                });
+            } else if (sensorData.aqiCategory === 'Hazardous') {
+                alerts.push({
+                    type: 'danger',
+                    message: 'Hazardous air quality detected! Ventilation and purification activated.'
+                });
+            }
+            
+            // Temperature alerts
+            if (sensorData.temperature > 30) {
+                alerts.push({
+                    type: 'warning',
+                    message: 'High temperature detected. Consider additional cooling measures.'
+                });
+            }
+            
+            // Humidity alerts
+            if (sensorData.humidity > 75) {
+                alerts.push({
+                    type: 'warning',
+                    message: 'High humidity detected. Mold risk increasing.'
+                });
+            } else if (sensorData.humidity < 25) {
+                alerts.push({
+                    type: 'info',
+                    message: 'Low humidity detected. Consider using a humidifier.'
+                });
+            }
+            
+            // Mold risk alerts
+            if (sensorData.moldRisk > 75) {
+                alerts.push({
+                    type: 'danger',
+                    message: 'High mold risk detected! Ventilation activated.'
+                });
+            }
+            
+            // Create and append alerts
+            alerts.forEach(alert => {
+                const alertElement = alertTemplate.cloneNode(true);
+                alertElement.classList.remove('hidden', 'alert-template');
+                
+                // Set alert type
+                if (alert.type === 'info') {
+                    alertElement.className = 'bg-blue-100 border-l-4 border-blue-500 p-4';
+                    alertElement.querySelector('svg').className = 'h-5 w-5 text-blue-500';
+                    alertElement.querySelector('.alert-message').className = 'text-sm text-blue-700 alert-message';
+                } else if (alert.type === 'warning') {
+                    alertElement.className = 'bg-yellow-100 border-l-4 border-yellow-500 p-4';
+                    alertElement.querySelector('svg').className = 'h-5 w-5 text-yellow-500';
+                    alertElement.querySelector('.alert-message').className = 'text-sm text-yellow-700 alert-message';
+                } else if (alert.type === 'danger') {
+                    alertElement.className = 'bg-red-100 border-l-4 border-red-500 p-4';
+                    alertElement.querySelector('svg').className = 'h-5 w-5 text-red-500';
+                    alertElement.querySelector('.alert-message').className = 'text-sm text-red-700 alert-message';
+                }
+                
+                // Set message
+                alertElement.querySelector('.alert-message').textContent = alert.message;
+                
+                // Add to container
+                alertsContainer.appendChild(alertElement);
+            });
+        }
+        
+        // Fetch current status from API
+        async function fetchStatus() {
+            try {
+                const response = await axios.get(`${API_URL}/api/status`);
+                
+                // Update sensor data
+                sensorData = {
+                    temperature: response.data.sensor_data.temperature,
+                    humidity: response.data.sensor_data.humidity,
+                    airQuality: response.data.sensor_data.air_quality,
+                    aqiCategory: response.data.sensor_data.aqi_category,
+                    moldRisk: response.data.sensor_data.mold_risk
+                };
+                
+                // Update device state
+                deviceState = response.data.device_state;
+                
+                // Update last updated time
+                document.getElementById('last-updated').textContent = 'Last updated: ' + 
+                    new Date().toLocaleTimeString();
+                
+                // Update UI
+                updateGauges();
+                updateDeviceStatus();
+                showAlerts();
+                
+                // Show connected status
+                document.getElementById('connection-status').className = 
+                    'px-3 py-1 rounded-full bg-green-500 text-white text-sm';
+                document.getElementById('connection-status').textContent = 'Connected';
+                
+            } catch (error) {
+                console.error('Error fetching status:', error);
+                
+                // Show disconnected status
+                document.getElementById('connection-status').className = 
+                    'px-3 py-1 rounded-full bg-red-500 text-white text-sm';
+                document.getElementById('connection-status').textContent = 'Disconnected';
+            }
+        }
+        
+        // Fetch history data from API
+        async function fetchHistory() {
+            try {
+                const response = await axios.get(`${API_URL}/api/history`);
+                historyData = response.data.history;
+                updateHistoryChart();
+            } catch (error) {
+                console.error('Error fetching history data:', error);
+            }
+        }
+        
+        // Fetch usage statistics from API
+        async function fetchUsage() {
+            try {
+                const response = await axios.get(`${API_URL}/api/usage`);
+                usageData = response.data.usage;
+                updateUsageChart();
+            } catch (error) {
+                console.error('Error fetching usage data:', error);
+            }
+        }
+        
+        // Control device via API
+        async function controlDevice(device, state) {
+            try {
+                await axios.post(`${API_URL}/api/control`, {
+                    device: device,
+                    state: state
+                });
+                
+                // Update local state immediately for responsive UI
+                deviceState[device] = state;
+                updateDeviceStatus();
+                
+                // Fetch latest status after a short delay
+                setTimeout(fetchStatus, 500);
+                
+            } catch (error) {
+                console.error(`Error controlling ${device}:`, error);
+                alert(`Failed to ${state ? 'turn on' : 'turn off'} ${device}`);
+            }
+        }
+        
+        // Setup event listeners
+        function setupEventListeners() {
+            // Fan controls
+            document.getElementById('fan-on').addEventListener('click', () => controlDevice('fan', true));
+            document.getElementById('fan-off').addEventListener('click', () => controlDevice('fan', false));
+            
+            // Purifier controls
+            document.getElementById('purifier-on').addEventListener('click', () => controlDevice('purifier', true));
+            document.getElementById('purifier-off').addEventListener('click', () => controlDevice('purifier', false));
+            
+            // Alarm controls
+            document.getElementById('alarm-on').addEventListener('click', () => controlDevice('alarm', true));
+            document.getElementById('alarm-off').addEventListener('click', () => controlDevice('alarm', false));
+        }
+        
+        // Initialize app
+        function init() {
+            initCharts();
+            setupEventListeners();
+            
+            // Initial data fetch
+            fetchStatus();
+            fetchHistory();
+            fetchUsage();
+            
+            // Set up polling for updates
+            setInterval(fetchStatus, 5000);  // Update status every 5 seconds
+            setInterval(fetchHistory, 10000); // Update history every 10 seconds
+            setInterval(fetchUsage, 30000);  // Update usage every 30 seconds
+        }
+        
+        // Start the application when DOM content is loaded
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
